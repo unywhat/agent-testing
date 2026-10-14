@@ -7,6 +7,7 @@ from prompt_toolkit import HTML
 import tomllib
 
 operating_system = system()
+status_icons = "✧◇◈∴⟡∵⚙✴✳✦"
 
 
 def get_config():
@@ -50,10 +51,47 @@ response = client.chat.completions.create(
             "content": user_input
         }
     ],
+    tools=[
+      {
+        "type": "function",
+        "function": {
+          "name": "get_weather",
+          "description": "Get weather for a city",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "city": {"type": "string"}
+            },
+            "required": ["city"]
+          }
+        }
+      }
+    ],
+    tool_choice="auto",
     stream=True
 )
 
+tool_calls = {}
+
 for chunk in response:
+    if chunk.choices[0].delta.tool_calls:
+        tool_delta = chunk.choices[0].delta.tool_calls[0]
+        tool_idx = tool_delta.index
+
+        if tool_idx not in tool_calls:
+            tool_calls[tool_idx] = {
+                "id": "",
+                "arguments": "",
+                "name": ""
+            }
+
+        if tool_delta.id:
+            tool_calls[tool_idx]["id"] += tool_delta.id
+        if tool_delta.function.arguments:
+            tool_calls[tool_idx]["arguments"] += tool_delta.function.arguments
+        if tool_delta.function.name:
+            tool_calls[tool_idx]["name"] += tool_delta.function.name
+        continue
     try:
         if config['general']['show_reasoning']:
             print(f'\033[90m{getattr(chunk.choices[0].delta, 'reasoning_content')}', end="", flush=True)
@@ -63,5 +101,9 @@ for chunk in response:
         content = chunk.choices[0].delta.content
         if content:
             print(f'\033[97m{content}', end="", flush=True)
+
+    for idx in tool_calls:
+        tool_call = tool_calls[idx]
+        print(tool_call)
 
 print('\033[0m\n')
